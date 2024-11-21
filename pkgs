@@ -1,0 +1,36 @@
+# basic packages
+
+base
+base-devel
+linux-lts
+linux-firmware
+mkinitcpio
+ntp
+nfs-utils
+sudo
+efibootmgr
+grub
+
+# networkmanager
+
+# VM tools
+
+qemu-guest-agent
+
+# tools default
+
+nano
+curl
+wget
+git
+lsof
+openssh
+cifs-utils
+fail2ban
+
+# tools
+
+# xorg
+# sddm
+# plasma
+# kde-applications
