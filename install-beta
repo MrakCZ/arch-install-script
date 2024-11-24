@@ -478,12 +478,10 @@ sed -i 's/relatime/relatime,discard/g' /mnt/etc/fstab
 
 # Nastavení Pacman konfigurace a aktualizací (pro nový systém)
 sed -i 's/#Color/Color/; s/#ParallelDownloads/ParallelDownloads/; s/#\[multilib\]/\[multilib\]/; /\[multilib\]/{n;s/#Include/Include/}' /mnt/etc/pacman.conf
-echo "country=$selected_country"
 reflector -c "$selected_country" -a 12 -p https --sort rate --save /mnt/etc/pacman.d/mirrorlist
 arch-chroot /mnt pacman -Syyu --noconfirm
 
 # Nastavení časové zóny na $selected_zone...
-echo "selected_zone=$selected_zone"
 ln -sf "/usr/share/zoneinfo/$selected_zone" /mnt/etc/localtime
 echo "Časová zóna byla nastavena na $selected_zone."
 
