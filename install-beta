@@ -42,20 +42,61 @@ fi
 
 # Další konfigurace uživatele a systému
 echo "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
-echo -e "\nZadejte jméno nového uživatele:\n"
-read user
 
-echo -e "\nZadejte heslo pro $user:\n"
-read -s uspw
+# Dotaz na jméno nového uživatele
+while true; do
+    echo -e "\nZadejte jméno nového uživatele:"
+    read user
+    if [[ -n "$user" ]]; then  # Zkontroluje, zda je pole neprázdné
+        break  # Pokud není prázdné, přejde se na další krok
+    else
+        echo "Jméno uživatele nemůže být prázdné. Zkuste to znovu."
+    fi
+done
 
-echo -e "\nZadejte heslo pro root uživatele:\n"
-read -s rtpw
+# Dotaz na heslo pro uživatele
+while true; do
+    echo -e "\nZadejte heslo pro $user:"
+    read -s uspw
+    if [[ -n "$uspw" ]]; then  # Zkontroluje, zda je pole neprázdné
+        break  # Pokud není prázdné, přejde se na další krok
+    else
+        echo "Heslo nemůže být prázdné. Zkuste to znovu."
+    fi
+done
 
-echo -e "\nNázev zařízení (hostname):\n"
-read host
+# Dotaz na heslo pro root
+while true; do
+    echo -e "\nZadejte heslo pro root uživatele:"
+    read -s rtpw
+    if [[ -n "$rtpw" ]]; then  # Zkontroluje, zda je pole neprázdné
+        break  # Pokud není prázdné, přejde se na další krok
+    else
+        echo "Heslo pro root nemůže být prázdné. Zkuste to znovu."
+    fi
+done
 
-echo -e "\nDoména (example.cz):\n"
-read domain
+# Dotaz na název zařízení (hostname)
+while true; do
+    echo -e "\nNázev zařízení (hostname):"
+    read host
+    if [[ -n "$host" ]]; then  # Zkontroluje, zda je pole neprázdné
+        break  # Pokud není prázdné, přejde se na další krok
+    else
+        echo "Název zařízení nemůže být prázdný. Zkuste to znovu."
+    fi
+done
+
+# Dotaz na doménu
+while true; do
+    echo -e "\nDoména (example.cz):"
+    read domain
+    if [[ -n "$domain" ]]; then  # Zkontroluje, zda je pole neprázdné
+        break  # Pokud není prázdné, přejde se na další krok
+    else
+        echo "Doména nemůže být prázdná. Zkuste to znovu."
+    fi
+done
 
 # Stáhnutí seznamu zrcadel pro všechny země
 mirror_list=$(curl -s https://archlinux.org/mirrorlist/all/https/)
@@ -179,6 +220,41 @@ fi
 iname="${interfaces[iface_number-1]}"
 echo "Vybrali jste rozhraní: $iname"
 
+# Funkce pro kontrolu platnosti IPv4 adresy s maskou (např. 192.168.1.1/24)
+valid_ipv4() {
+    local ip=$1
+    # Používáme regulární výraz pro validaci IPv4 adresy s maskou
+    if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]{1,2}|[1-2][0-9]|3[0-2])$ ]]; then
+        return 0  # Platná IPv4
+    else
+        return 1  # Neplatná IPv4
+    fi
+}
+
+# Funkce pro kontrolu platnosti IPv6 adresy s maskou (musí mít masku v rozsahu /0 až /128)
+valid_ipv6() {
+    local ip=$1
+    # Regulární výraz pro validaci IPv6 adresy s maskou (/0 až /128)
+    if [[ "$ip" =~ ^([0-9a-fA-F:]+)(/[0-9]{1,3})$ ]]; then
+        # Zkontrolujeme, jestli maska je mezi 0 a 128, pokud je přítomna
+        if [[ "${BASH_REMATCH[2]}" =~ ^/[0-9]+$ && ${BASH_REMATCH[2]#"/"} -ge 0 && ${BASH_REMATCH[2]#"/"} -le 128 ]]; then
+            return 0  # Platná IPv6 adresa s platnou maskou
+        fi
+    fi
+    return 1  # Neplatná IPv6 adresa
+}
+
+# Funkce pro kontrolu validní IPv6 brány (bez masky)
+valid_ipv6_gateway() {
+    local ip=$1
+    # Kontroluje, zda obsahuje pouze platné znaky pro IPv6 (a-f, A-F, 0-9, a ':')
+    if [[ "$ip" =~ ^[0-9a-fA-F:]+$ ]]; then
+        return 0  # Platná IPv6 brána
+    else
+        return 1  # Neplatná IPv6 brána
+    fi
+}
+
 # Síťová konfigurace
 echo -e "\nChcete použít DHCP pro síť? (y/n)"
 read -r dhcp_choice
@@ -191,29 +267,106 @@ if [[ "$dhcp_choice" =~ ^[Yy]$ ]]; then
     ipv6_gateway=""
 else
     dhcp=false
-    echo -e "Zadejte IPv4 adresu a masku (0.0.0.0/0):"
-    read -r ipv4_address
-    echo -e "Zadejte bránu pro IPv4:"
-    read -r ipv4_gateway
-    echo -e "Zadejte IPv6 adresu a masku (0::/0) (nevyplňujte pro vynechání):"
-    read -r ipv6_address
+    
+    # Zadejte IPv4 adresu a masku
+    while true; do
+        echo -e "Zadejte IPv4 adresu a masku (0.0.0.0/0):"
+        read -r ipv4_address
+        if valid_ipv4 "$ipv4_address"; then
+            break
+        else
+            echo "Neplatná IPv4 adresa nebo maska. Zadejte správný formát."
+        fi
+    done
+
+    # Zadejte bránu pro IPv4 (pouze bez masky)
+    while true; do
+        echo -e "Zadejte bránu pro IPv4 (bez masky):"
+        read -r ipv4_gateway
+        if [[ "$ipv4_gateway" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            break
+        else
+            echo "Neplatná IPv4 brána. Zadejte pouze adresu bez masky (např. 192.168.1.1)."
+        fi
+    done
+
+    # Zadejte IPv6 adresu a masku
+    while true; do
+        echo -e "Zadejte IPv6 adresu a masku (0::/0) (nevyplňujte pro vynechání):"
+        read -r ipv6_address
+        if [[ -z "$ipv6_address" ]]; then
+            break  # IPv6 adresa může být prázdná, není povinná
+        elif valid_ipv6 "$ipv6_address"; then
+            break
+        else
+            echo "Neplatná IPv6 adresa nebo maska. Ujistěte se, že obsahuje platnou adresu a masku (/0 až /128)."
+        fi
+    done
+
+    # Zadejte bránu pro IPv6 (pokud byla zadána IPv6 adresa)
     if [[ -n "$ipv6_address" ]]; then
-        echo -e "Zadejte bránu pro IPv6:"
-        read -r ipv6_gateway
-    else
-        ipv6_gateway=""
+        while true; do
+            echo -e "Zadejte bránu pro IPv6 (bez masky):"
+            read -r ipv6_gateway
+            if valid_ipv6_gateway "$ipv6_gateway"; then
+                break
+            else
+                echo "Neplatná IPv6 brána. Ujistěte se, že obsahuje pouze platné znaky (a-f, A-F, 0-9, a ':')."
+            fi
+        done
     fi
 fi
+
+# Funkce pro kontrolu platnosti IPv4 adresy bez masky (např. 192.168.1.1)
+valid_ipv4_dns() {
+    local ip=$1
+    # Používáme regulární výraz pro validaci IPv4 adresy bez masky
+    if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        return 0  # Platná IPv4
+    else
+        return 1  # Neplatná IPv4
+    fi
+}
+
+# Funkce pro kontrolu platnosti IPv6 adresy bez masky (pouze validní znaky)
+valid_ipv6_dns() {
+    local ip=$1
+    # Kontrola platných znaků pro IPv6
+    if [[ "$ip" =~ ^[0-9a-fA-F:]+$ ]]; then
+        return 0  # Platná IPv6 (bez masky)
+    else
+        return 1  # Neplatná IPv6
+    fi
+}
 
 # Dotazy na DNS
 echo -e "\nChcete nastavit DNS servery? (y/n)"
 read -r dns_choice
 
 if [[ "$dns_choice" =~ ^[Yy]$ ]]; then
-    echo -e "Zadejte DNS server pro IPv4:"
-    read -r ipv4_dns
-    echo -e "Zadejte DNS server pro IPv6 (nevyplňujte pro vynechání):"
-    read -r ipv6_dns
+    # Zadejte DNS server pro IPv4
+    while true; do
+        echo -e "Zadejte DNS server pro IPv4:"
+        read -r ipv4_dns
+        if valid_ipv4_dns "$ipv4_dns"; then
+            break
+        else
+            echo "Neplatná IPv4 adresa pro DNS. Zadejte správný formát (např. 192.168.1.1)."
+        fi
+    done
+
+    # Zadejte DNS server pro IPv6
+    while true; do
+        echo -e "Zadejte DNS server pro IPv6 (nevyplňujte pro vynechání):"
+        read -r ipv6_dns
+        if [[ -z "$ipv6_dns" ]]; then
+            break  # IPv6 DNS může být prázdný, pokud není zadán
+        elif valid_ipv6_dns "$ipv6_dns"; then
+            break
+        else
+            echo "Neplatná IPv6 adresa pro DNS. Ujistěte se, že obsahuje pouze platné znaky (a-f, A-F, 0-9, a ':')."
+        fi
+    done
 else
     ipv4_dns=""
     ipv6_dns=""
