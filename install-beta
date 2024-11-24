@@ -57,13 +57,127 @@ read host
 echo -e "\nDoména (example.cz):\n"
 read domain
 
-echo -e "\nNastavte zemi pro stahování balíčků (např. Czechia):\n"
-read country
+# Stáhnutí seznamu zrcadel pro všechny země
+mirror_list=$(curl -s https://archlinux.org/mirrorlist/all/https/)
 
-echo -e "\nZadejte požadovanou časovou zónu ve formátu Country/Region (např. Europe/Prague):\n"
-read tmzn
+# Přejdeme na řádky, které začínají až po "## Worldwide", ale včetně tohoto řádku
+countries=$(echo "$mirror_list" | sed '1,/## Worldwide/ d' | grep -oP '^## \K.*' | sort)
 
-iname=$(ls -1 /sys/class/net | grep -i en) # hledání síťového rozhraní
+# Přidáme řádek "Worldwide" zpět na začátek
+countries="Worldwide"$'\n'"$countries"
+
+# Počet dostupných zemí
+country_count=$(echo "$countries" | wc -l)
+
+# Výpis dostupných zemí s číslováním
+echo "Dostupné země pro Arch Linux zrcadla:"
+echo "$countries" | nl
+
+# Uživatelský vstup pro výběr země
+echo
+read -p "Zadejte číslo země (1-$country_count): " country_choice
+
+# Ověření platného výběru
+if [[ "$country_choice" =~ ^[0-9]+$ ]] && ((country_choice >= 1 && country_choice <= country_count)); then
+    selected_country=$(echo "$countries" | sed -n "${country_choice}p")
+    echo "Vybraná země: $selected_country"
+else
+    echo "Neplatný výběr. Ukončuji skript."
+    exit 1
+fi
+
+
+# Načtení dostupných regionů a časových zón
+regions=($(ls -1 /usr/share/zoneinfo | grep -E '^(Africa|America|Antarctica|Asia|Australia|Europe|Indian|Pacific)$'))
+
+# Počet dostupných regionů
+region_count=${#regions[@]}
+
+# Pokud není žádný region, ukončíme skript
+if ((region_count == 0)); then
+    echo "Nenalezena žádná časová zóna. Ukončuji skript."
+    exit 1
+fi
+
+# Výpis dostupných regionů
+echo "Dostupné regiony:"
+for i in "${!regions[@]}"; do
+    echo "$((i+1)). ${regions[i]}"
+done
+
+# Dotaz na výběr regionu
+echo
+read -p "Vyberte číslo regionu (1-$region_count) nebo zadejte část názvu pro vyhledávání: " region_input
+
+# Pokud uživatel zadá číslo
+if [[ "$region_input" =~ ^[0-9]+$ ]] && ((region_input >= 1 && region_input <= region_count)); then
+    selected_region="${regions[region_input-1]}"
+else
+    # Pokud zadá část názvu regionu pro vyhledávání
+    selected_region=$(echo "${regions[@]}" | grep -i "$region_input" | head -n 1)
+    if [[ -z "$selected_region" ]]; then
+        echo "Region nenalezen. Ukončuji skript."
+        exit 1
+    fi
+    echo "Vybraný region: $selected_region"
+fi
+
+# Načtení dostupných časových zón pro vybraný region
+zones=($(ls -1 "/usr/share/zoneinfo/$selected_region"))
+zone_count=${#zones[@]}
+
+# Pokud nejsou žádné časové zóny pro vybraný region
+if ((zone_count == 0)); then
+    echo "Pro vybraný region '$selected_region' nejsou dostupné žádné časové zóny. Ukončuji skript."
+    exit 1
+fi
+
+# Výpis dostupných časových zón
+echo "Dostupné časové zóny pro region '$selected_region':"
+for i in "${!zones[@]}"; do
+    echo "$((i+1)). ${zones[i]}"
+done
+
+# Dotaz na výběr časové zóny
+echo
+read -p "Vyberte číslo časové zóny (1-$zone_count): " zone_number
+
+if [[ ! "$zone_number" =~ ^[0-9]+$ ]] || ((zone_number < 1 || zone_number > zone_count)); then
+    echo "Neplatný výběr časové zóny. Ukončuji skript."
+    exit 1
+fi
+
+selected_zone="$selected_region/${zones[zone_number-1]}"
+echo "Vybraná časová zóna: $selected_zone"
+
+# Načtení síťových rozhraní
+echo "Detekce dostupných síťových rozhraní:"
+interfaces=($(ls -1 /sys/class/net))
+iface_count=${#interfaces[@]}
+
+if ((iface_count == 0)); then
+    echo "Nenalezena žádná síťová rozhraní. Ukončuji skript."
+    exit 1
+fi
+
+# Výpis očíslovaného seznamu síťových rozhraní
+for i in "${!interfaces[@]}"; do
+    echo "$((i+1)). ${interfaces[i]}"
+done
+
+# Dotaz na výběr rozhraní
+echo
+read -p "Vyberte číslo rozhraní pro konfiguraci (1-$iface_count): " iface_number
+
+# Kontrola, zda číslo odpovídá dostupnému rozhraní
+if [[ ! "$iface_number" =~ ^[0-9]+$ ]] || ((iface_number < 1 || iface_number > iface_count)); then
+    echo "Neplatný výběr. Ukončuji skript."
+    exit 1
+fi
+
+# Výběr rozhraní
+iname="${interfaces[iface_number-1]}"
+echo "Vybrali jste rozhraní: $iname"
 
 # Síťová konfigurace
 echo -e "\nChcete použít DHCP pro síť? (y/n)"
@@ -126,8 +240,8 @@ uspw=$uspw
 rtpw=$rtpw
 host=$host
 domain=$domain
-country=$country
-tmzn=$tmzn
+country=$selected_country
+tmzn=$selected_zone
 
 # Síťová konfigurace
 iname=$iname
@@ -177,8 +291,11 @@ mount --mkdir "$part1" /mnt/EFI
 
 echo "Oddíly byly úspěšně připojeny."
 
+# Spuštění reflectoru pro vybranou zemi
+reflector --country "$country" --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
+echo "Mirrorlist byl aktualizován pro zemi: $country"
+
 # Instalace balíčků
-reflector -c $country -a 12 -p https --sort rate --save /etc/pacman.d/mirrorlist
 pacman-key --init
 pacman-key --populate archlinux
 pacman -Sy --noconfirm -S archlinux-keyring
@@ -190,10 +307,13 @@ sed -i 's/relatime/relatime,discard/g' /mnt/etc/fstab
 
 # Nastavení Pacman konfigurace a aktualizací (pro nový systém)
 sed -i 's/#Color/Color/; s/#ParallelDownloads/ParallelDownloads/; s/#\[multilib\]/\[multilib\]/; /\[multilib\]/{n;s/#Include/Include/}' /mnt/etc/pacman.conf
+reflector -c "$country" -a 12 -p https --sort rate --save /mnt/etc/pacman.d/mirrorlist
 arch-chroot /mnt pacman -Syyu --noconfirm
 
 # Nastavení časové zóny na $tmzn...
-ln -sf /usr/share/zoneinfo/$tmzn /mnt/etc/localtime
+ln -sf "/usr/share/zoneinfo/$tmzn" /mnt/etc/localtime
+echo "Časová zóna byla nastavena na $tmzn."
+
 arch-chroot /mnt hwclock --systohc
 
 # Konfigurace vconsole...
