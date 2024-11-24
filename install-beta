@@ -408,8 +408,8 @@ uspw=$uspw
 rtpw=$rtpw
 host=$host
 domain=$domain
-country=$selected_country
-tmzn=$selected_zone
+selected_country=$selected_country
+selected_zone=$selected_zone
 
 # Síťová konfigurace
 iname=$iname
@@ -463,8 +463,8 @@ mount --mkdir "$part1" /mnt/EFI
 echo "Oddíly byly úspěšně připojeny."
 
 # Spuštění reflectoru pro vybranou zemi
-reflector --country "$country" --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
-echo "Mirrorlist byl aktualizován pro zemi: $country"
+reflector --country "$selected_country" --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
+echo "Mirrorlist byl aktualizován pro zemi: $selected_country"
 
 # Instalace balíčků
 pacman-key --init
@@ -478,12 +478,14 @@ sed -i 's/relatime/relatime,discard/g' /mnt/etc/fstab
 
 # Nastavení Pacman konfigurace a aktualizací (pro nový systém)
 sed -i 's/#Color/Color/; s/#ParallelDownloads/ParallelDownloads/; s/#\[multilib\]/\[multilib\]/; /\[multilib\]/{n;s/#Include/Include/}' /mnt/etc/pacman.conf
-reflector -c "$country" -a 12 -p https --sort rate --save /mnt/etc/pacman.d/mirrorlist
+echo "country=$selected_country"
+reflector -c "$selected_country" -a 12 -p https --sort rate --save /mnt/etc/pacman.d/mirrorlist
 arch-chroot /mnt pacman -Syyu --noconfirm
 
-# Nastavení časové zóny na $tmzn...
-ln -sf "/usr/share/zoneinfo/$tmzn" /mnt/etc/localtime
-echo "Časová zóna byla nastavena na $tmzn."
+# Nastavení časové zóny na $selected_zone...
+echo "selected_zone=$selected_zone"
+ln -sf "/usr/share/zoneinfo/$selected_zone" /mnt/etc/localtime
+echo "Časová zóna byla nastavena na $selected_zone."
 
 arch-chroot /mnt hwclock --systohc
 
