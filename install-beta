@@ -198,13 +198,23 @@ echo "Vybraná časová zóna: $selected_zone"
 
 echo "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
-# Načtení síťových rozhraní
 echo "Detekce dostupných síťových rozhraní:"
-interfaces=($(ls -1 /sys/class/net))
+# Načtení seznamu síťových rozhraní s filtrací na LAN a Wi-Fi
+interfaces=()
+for iface in /sys/class/net/*; do
+    iface_name=$(basename "$iface")
+    iface_type=$(cat "$iface/type" 2>/dev/null)
+    
+    # Přidání rozhraní, pokud je Ethernet (1) nebo Wi-Fi (801)
+    if [[ "$iface_type" == "1" || "$iface_type" == "801" ]]; then
+        interfaces+=("$iface_name")
+    fi
+done
+
 iface_count=${#interfaces[@]}
 
 if ((iface_count == 0)); then
-    echo "Nenalezena žádná síťová rozhraní. Ukončuji skript."
+    echo "Nenalezena žádná relevantní síťová rozhraní. Ukončuji skript."
     exit 1
 fi
 
