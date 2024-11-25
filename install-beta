@@ -199,15 +199,30 @@ echo "Vybraná časová zóna: $selected_zone"
 echo "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
 echo "Detekce dostupných síťových rozhraní:"
-# Načtení seznamu síťových rozhraní s filtrací na LAN a Wi-Fi
+
+# Inicializace seznamů pro relevantní rozhraní
 interfaces=()
+types=()
+
 for iface in /sys/class/net/*; do
     iface_name=$(basename "$iface")
+
+    # Získání typu rozhraní z "type"
     iface_type=$(cat "$iface/type" 2>/dev/null)
-    
-    # Přidání rozhraní, pokud je Ethernet (1) nebo Wi-Fi (801)
+
+    # Ignorování nerelevantních typů
+    # 1 = Ethernet (LAN), 801 = Wi-Fi
     if [[ "$iface_type" == "1" || "$iface_type" == "801" ]]; then
+        # Kontrola přítomnosti adresáře "wireless" pro identifikaci Wi-Fi
+        if [[ -d "$iface/wireless" ]]; then
+            iface_desc="Wi-Fi"
+        else
+            iface_desc="LAN"
+        fi
+
+        # Přidání do seznamu relevantních rozhraní
         interfaces+=("$iface_name")
+        types+=("$iface_desc")
     fi
 done
 
@@ -218,9 +233,9 @@ if ((iface_count == 0)); then
     exit 1
 fi
 
-# Výpis očíslovaného seznamu síťových rozhraní
+# Výpis očíslovaného seznamu síťových rozhraní s typem
 for i in "${!interfaces[@]}"; do
-    echo "$((i+1)). ${interfaces[i]}"
+    echo "$((i+1)). ${interfaces[i]} (${types[i]})"
 done
 
 # Dotaz na výběr rozhraní
@@ -235,7 +250,8 @@ fi
 
 # Výběr rozhraní
 iname="${interfaces[iface_number-1]}"
-echo "Vybrali jste rozhraní: $iname"
+itype="${types[iface_number-1]}"
+echo "Vybrali jste rozhraní: $iname ($itype)"
 
 echo "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
